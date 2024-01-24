@@ -366,7 +366,10 @@
                   },
                   "defaultValue": "value::all",
                   "queryType": 1,
-                  "resourceType": "microsoft.resourcegraph/resources"
+                  "resourceType": "microsoft.resourcegraph/resources",
+                  "value": [
+                    "value::all"
+                  ]
                 }
               ],
               "style": "pills",
@@ -431,7 +434,7 @@
                     "durationMs": 86400000
                   },
                   "queryType": 7,
-                  "value": "AzureSecurityWindowsAgent"
+                  "value": "ChangeTracking-Windows"
                 },
                 {
                   "id": "9dd0fd98-12a6-4649-b4ef-d31a6348e06d",
@@ -448,7 +451,7 @@
                     "durationMs": 86400000
                   },
                   "queryType": 7,
-                  "value": "CustomScriptExtension"
+                  "value": "MDE.Windows"
                 },
                 {
                   "id": "322a1b3b-9956-4d8c-9d7c-9aea33bd634a",
@@ -824,7 +827,59 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "resources\r\n| where type in ({MachineType})\r\n| extend\r\n    JoinID = toupper(id),\r\n\tOSName = iff( type  == 'microsoft.hybridcompute/machines', tostring(properties.osProfile.computerName), tostring((properties.extended.instanceView).computerName)),\r\n    OSType = iff( type  == 'microsoft.hybridcompute/machines', tostring(properties.osName), tolower(tostring((properties.storageProfile).osDisk.osType))),\r\n    OSsku = iff( type  == 'microsoft.hybridcompute/machines', tostring(properties.osSku), tostring((properties.extended.instanceView).osName)),\r\n    ServerStatus = iff( type  == 'microsoft.hybridcompute/machines', tostring(properties.status), tostring((properties.extended.instanceView).powerState.displayStatus))\r\n| where ServerStatus in ({ServerStatus})\r\n| join kind=leftouter(\r\n    resources\r\n| where type == 'microsoft.hybridcompute/machines/extensions' or type == 'microsoft.compute/virtualmachines/extensions'\r\n| where properties.type in ('{Extension1:value}','{Extension2:value}','{Extension3:value}','{Extension4:value}')\r\n| extend\r\n        VMId = toupper(substring(id, 0, indexof(id, '/extensions'))),\r\n        ExtensionName = tostring(properties.type),\r\n        Version = iff( type  == 'microsoft.hybridcompute/machines/extensions', tostring(properties.instanceView.typeHandlerVersion), tostring(properties.typeHandlerVersion)),\r\n\t\tStatus = tostring (properties.provisioningState)\r\n) on $left.JoinID == $right.VMId\r\n| where OSType in ('windows')\r\n| extend ServerName = id\r\n| extend VersionNumber = pack(ExtensionName, Version)\r\n| extend ProvisionState = pack(ExtensionName, Status)\r\n| summarize ExtVersions = make_bag(VersionNumber),ExtProvision = make_bag(ProvisionState) by ServerName, OSType, OSName,OSsku, ServerStatus\r\n| extend Extension1Version = tostring((parse_json(ExtVersions)).['{Extension1:value}']), ['1-{Extension1:value}'] = iff(isnotnull((parse_json(ExtProvision)).['{Extension1:value}']),(parse_json(ExtProvision)).['{Extension1:value}'],\"<blank>\")\r\n| extend Extension2Version = tostring((parse_json(ExtVersions)).['{Extension2:value}']), ['2-{Extension2:value}'] = iff(isnotnull((parse_json(ExtProvision)).['{Extension2:value}']),(parse_json(ExtProvision)).['{Extension2:value}'],\"<blank>\")\r\n| extend Extension3Version = tostring((parse_json(ExtVersions)).['{Extension3:value}']), ['3-{Extension3:value}'] = iff(isnotnull((parse_json(ExtProvision)).['{Extension3:value}']),(parse_json(ExtProvision)).['{Extension3:value}'],\"<blank>\")\r\n| extend Extension4Version = tostring((parse_json(ExtVersions)).['{Extension4:value}']), ['4-{Extension4:value}'] = iff(isnotnull((parse_json(ExtProvision)).['{Extension4:value}']),(parse_json(ExtProvision)).['{Extension4:value}'],\"<blank>\")\r\n| where \"{Extension1Status}\"==\"\" or ['1-{Extension1:value}'] == \"{Extension1Status:value}\"\r\n| where \"{Extension2Status}\"==\"\" or ['2-{Extension2:value}'] == \"{Extension2Status:value}\"\r\n| where \"{Extension3Status}\"==\"\" or ['3-{Extension3:value}'] == \"{Extension3Status:value}\"\r\n| where \"{Extension4Status}\"==\"\" or ['4-{Extension4:value}'] == \"{Extension4Status:value}\"\r\n| project ServerName, OSsku, ServerStatus, OSType,\r\n['1-{Extension1:value}'],Extension1Version,\r\n['2-{Extension2:value}'],Extension2Version,\r\n['3-{Extension3:value}'],Extension3Version,\r\n['4-{Extension4:value}'],Extension4Version\r\n| sort by Extension1Version",
+              "query": "resources\r\n| where type in ({MachineType})\r\n| extend\r\n    JoinID = toupper(id),\r\n    OSType = iff( type  == 'microsoft.hybridcompute/machines', tostring(properties.osName), tolower(tostring((properties.storageProfile).osDisk.osType))),\r\n    ServerStatus = iff( type  == 'microsoft.hybridcompute/machines', tostring(properties.status), tostring((properties.extended.instanceView).powerState.displayStatus))\r\n| where ServerStatus in ({ServerStatus})\r\n| join kind=leftouter(\r\n    resources\r\n| where type == 'microsoft.hybridcompute/machines/extensions' or type == 'microsoft.compute/virtualmachines/extensions'\r\n| where properties.type in ('{Extension1:value}','{Extension2:value}','{Extension3:value}','{Extension4:value}')\r\n| extend\r\n        VMId = toupper(substring(id, 0, indexof(id, '/extensions'))),\r\n        ExtensionName = tostring(properties.type),\r\n\t\tVersion = tostring(properties.instanceView.typeHandlerVersion),\r\n\t\tStatus = tostring (properties.provisioningState)\r\n) on $left.JoinID == $right.VMId\r\n| where OSType in ('windows')\r\n| extend ArcServer = id\r\n| extend ProvisionState = pack(ExtensionName, Status)\r\n| summarize ExtProvision = make_bag(ProvisionState) by ArcServer, OSType, ServerStatus\r\n| extend ['{Extension1:value}'] = iff(isnotnull((parse_json(ExtProvision)).['{Extension1:value}']),(parse_json(ExtProvision)).['{Extension1:value}'],\"<blank>\")\r\n| extend ['{Extension2:value}'] = iff(isnotnull((parse_json(ExtProvision)).['{Extension2:value}']),(parse_json(ExtProvision)).['{Extension2:value}'],\"<blank>\")\r\n| extend ['{Extension3:value}'] = iff(isnotnull((parse_json(ExtProvision)).['{Extension3:value}']),(parse_json(ExtProvision)).['{Extension3:value}'],\"<blank>\")\r\n| extend ['{Extension4:value}'] = iff(isnotnull((parse_json(ExtProvision)).['{Extension4:value}']),(parse_json(ExtProvision)).['{Extension4:value}'],\"<blank>\")\r\n| where \"{Extension1Status}\"==\"\" or ['{Extension1:value}'] == \"{Extension1Status:value}\"\r\n| where \"{Extension2Status}\"==\"\" or ['{Extension2:value}'] == \"{Extension2Status:value}\"\r\n| where \"{Extension3Status}\"==\"\" or ['{Extension3:value}'] == \"{Extension3Status:value}\"\r\n| where \"{Extension4Status}\"==\"\" or ['{Extension4:value}'] == \"{Extension4Status:value}\"\r\n| sort by ArcServer\r\n| summarize [\"Servers filtered\"] = pack(\"Servers filtered\", makelist(split(ArcServer,\"/\",8)))",
+              "size": 3,
+              "queryType": 1,
+              "resourceType": "microsoft.resourcegraph/resources",
+              "crossComponentResources": [
+                "{Subscriptions}"
+              ],
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "ArcServer",
+                    "formatter": 7,
+                    "formatOptions": {
+                      "linkTarget": "CellDetails",
+                      "linkIsContextBlade": true
+                    }
+                  }
+                ]
+              },
+              "tileSettings": {
+                "showBorder": false,
+                "titleContent": {
+                  "columnMatch": "Metric",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "Count",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "auto"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                }
+              }
+            },
+            "customWidth": "13",
+            "name": "query - 9 - Copy",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "resources\r\n| where type in ({MachineType})\r\n| extend\r\n    JoinID = toupper(id),\r\n\tOSName = iff( type  == 'microsoft.hybridcompute/machines', tostring(properties.osProfile.computerName), tostring((properties.extended.instanceView).computerName)),\r\n    OSType = iff( type  == 'microsoft.hybridcompute/machines', tostring(properties.osName), tolower(tostring((properties.storageProfile).osDisk.osType))),\r\n    OSsku = iff( type  == 'microsoft.hybridcompute/machines', tostring(properties.osSku), tostring((properties.extended.instanceView).osName)),\r\n    ServerStatus = iff( type  == 'microsoft.hybridcompute/machines', tostring(properties.status), tostring((properties.extended.instanceView).powerState.displayStatus))\r\n| where ServerStatus in ({ServerStatus})\r\n| join kind=leftouter(\r\n    resources\r\n| where type == 'microsoft.hybridcompute/machines/extensions' or type == 'microsoft.compute/virtualmachines/extensions'\r\n| where properties.type in ('{Extension1:value}','{Extension2:value}','{Extension3:value}','{Extension4:value}')\r\n| extend\r\n        VMId = toupper(substring(id, 0, indexof(id, '/extensions'))),\r\n        ExtensionName = tostring(properties.type),\r\n        Version = iff( type  == 'microsoft.hybridcompute/machines/extensions', tostring(properties.instanceView.typeHandlerVersion), tostring(properties.typeHandlerVersion)),\r\n\t\tStatus = tostring (properties.provisioningState)\r\n) on $left.JoinID == $right.VMId\r\n| where OSType in ('windows')\r\n| extend ServerName = id\r\n| extend VersionNumber = pack(ExtensionName, Version)\r\n| extend ProvisionState = pack(ExtensionName, Status)\r\n| summarize ExtVersions = make_bag(VersionNumber),ExtProvision = make_bag(ProvisionState) by ServerName, OSType, OSName,OSsku, ServerStatus\r\n| extend resourceGroup = split (ServerName,\"/providers\",0)[0]\r\n| extend Extension1Version = tostring((parse_json(ExtVersions)).['{Extension1:value}']), ['1-{Extension1:value}'] = iff(isnotnull((parse_json(ExtProvision)).['{Extension1:value}']),(parse_json(ExtProvision)).['{Extension1:value}'],\"<blank>\")\r\n| extend Extension2Version = tostring((parse_json(ExtVersions)).['{Extension2:value}']), ['2-{Extension2:value}'] = iff(isnotnull((parse_json(ExtProvision)).['{Extension2:value}']),(parse_json(ExtProvision)).['{Extension2:value}'],\"<blank>\")\r\n| extend Extension3Version = tostring((parse_json(ExtVersions)).['{Extension3:value}']), ['3-{Extension3:value}'] = iff(isnotnull((parse_json(ExtProvision)).['{Extension3:value}']),(parse_json(ExtProvision)).['{Extension3:value}'],\"<blank>\")\r\n| extend Extension4Version = tostring((parse_json(ExtVersions)).['{Extension4:value}']), ['4-{Extension4:value}'] = iff(isnotnull((parse_json(ExtProvision)).['{Extension4:value}']),(parse_json(ExtProvision)).['{Extension4:value}'],\"<blank>\")\r\n| where \"{Extension1Status}\"==\"\" or ['1-{Extension1:value}'] == \"{Extension1Status:value}\"\r\n| where \"{Extension2Status}\"==\"\" or ['2-{Extension2:value}'] == \"{Extension2Status:value}\"\r\n| where \"{Extension3Status}\"==\"\" or ['3-{Extension3:value}'] == \"{Extension3Status:value}\"\r\n| where \"{Extension4Status}\"==\"\" or ['4-{Extension4:value}'] == \"{Extension4Status:value}\"\r\n| project ServerName, resourceGroup, OSsku, ServerStatus, OSType,\r\n['1-{Extension1:value}'],Extension1Version,\r\n['2-{Extension2:value}'],Extension2Version,\r\n['3-{Extension3:value}'],Extension3Version,\r\n['4-{Extension4:value}'],Extension4Version\r\n| sort by Extension1Version",
               "size": 2,
               "showAnalytics": true,
               "showExportToExcel": true,
@@ -840,23 +895,32 @@
                     "formatter": 13,
                     "formatOptions": {
                       "linkTarget": "Resource",
-                      "linkIsContextBlade": true,
+                      "linkIsContextBlade": false,
                       "showIcon": true,
-                      "customColumnWidthSetting": "26.8571ch"
+                      "customColumnWidthSetting": "23.5714ch"
+                    }
+                  },
+                  {
+                    "columnMatch": "resourceGroup",
+                    "formatter": 13,
+                    "formatOptions": {
+                      "linkTarget": "Resource",
+                      "showIcon": true,
+                      "customColumnWidthSetting": "23.2857ch"
                     }
                   },
                   {
                     "columnMatch": "OSsku",
                     "formatter": 0,
                     "formatOptions": {
-                      "customColumnWidthSetting": "35.2857ch"
+                      "customColumnWidthSetting": "31.8571ch"
                     }
                   },
                   {
                     "columnMatch": "ServerStatus",
                     "formatter": 0,
                     "formatOptions": {
-                      "customColumnWidthSetting": "16.2857ch"
+                      "customColumnWidthSetting": "13.7143ch"
                     }
                   },
                   {
@@ -952,7 +1016,7 @@
                           "text": "[\"Extension3Version\"]"
                         }
                       ],
-                      "customColumnWidthSetting": "30ch"
+                      "customColumnWidthSetting": "25.4286ch"
                     }
                   },
                   {
@@ -1084,7 +1148,7 @@
                   "queryType": 1,
                   "resourceType": "microsoft.resourcegraph/resources",
                   "value": [
-                    "value::all"
+                    "VM running"
                   ]
                 }
               ],
@@ -1133,7 +1197,7 @@
                     "durationMs": 86400000
                   },
                   "queryType": 7,
-                  "value": "MDE.Linux"
+                  "value": "AzureMonitorLinuxAgent"
                 },
                 {
                   "id": "740d2360-9a86-4bda-8633-6c8e72743389",
@@ -1150,7 +1214,7 @@
                     "durationMs": 86400000
                   },
                   "queryType": 7,
-                  "value": "CustomScript"
+                  "value": "ChangeTracking-Linux"
                 },
                 {
                   "id": "9dd0fd98-12a6-4649-b4ef-d31a6348e06d",
@@ -1427,8 +1491,7 @@
                   "timeContext": {
                     "durationMs": 86400000
                   },
-                  "label": "Extension 4",
-                  "value": null
+                  "label": "Extension 4"
                 }
               ],
               "style": "formVertical",
@@ -1510,7 +1573,7 @@
                           "durationMs": 86400000
                         },
                         "queryType": 7,
-                        "value": "OmsAgentForLinux"
+                        "value": "AzureMonitorLinuxAgent"
                       }
                     ],
                     "style": "pills",
@@ -1561,7 +1624,7 @@
                     "formatter": 13,
                     "formatOptions": {
                       "linkTarget": "Resource",
-                      "linkIsContextBlade": true,
+                      "linkIsContextBlade": false,
                       "showIcon": true,
                       "customColumnWidthSetting": "26.8571ch"
                     }
@@ -1713,9 +1776,20 @@
                   }
                 ],
                 "rowLimit": 2000,
-                "filter": true
+                "filter": true,
+                "sortBy": [
+                  {
+                    "itemKey": "$gen_thresholds_^1-.*_4",
+                    "sortOrder": 1
+                  }
+                ]
               },
-              "sortBy": []
+              "sortBy": [
+                {
+                  "itemKey": "$gen_thresholds_^1-.*_4",
+                  "sortOrder": 1
+                }
+              ]
             },
             "name": "query - 5"
           }
@@ -1730,7 +1804,8 @@
     }
   ],
   "fallbackResourceIds": [
-    "azure monitor"
+    "/subscriptions/59b301d0-77eb-4a76-aba5-53cb5731c342/resourcegroups/rg-sentinel/providers/microsoft.operationalinsights/workspaces/laws-trsentinel"
   ],
+  "fromTemplateId": "sentinel-UserWorkbook",
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
 }
